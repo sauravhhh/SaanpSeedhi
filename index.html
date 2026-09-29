@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#2a0f1e">
+    <meta name="description" content="Saanp Seedhi — the classic Indian Snakes and Ladders board game. Installable PWA, works offline.">
+    <title>Saanp Seedhi</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #2a0f1e;
+            --panel: #3d1530;
+            --ink: #fdf6ec;
+            --muted: #c9a0b4;
+            --gold: #f5b301;
+            --radius: 16px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 14px 12px calc(18px + env(safe-area-inset-bottom));
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .wrap { width: 100%; max-width: 460px; display: flex; flex-direction: column; align-items: center; }
+
+        .top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; align-self: flex-start; width: 100%; }
+        .top img { width: 42px; height: 42px; border-radius: 12px; box-shadow: 0 4px 14px rgba(245,179,1,.35); }
+        .top h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.4px; flex: 1; }
+        .top h1 small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .4px; }
+        .icon-btn {
+            border: none; background: var(--panel); color: var(--ink);
+            width: 44px; height: 44px; border-radius: 12px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .icon-btn:active { transform: scale(.94); }
+        .icon-btn svg { width: 22px; height: 22px; }
+
+        /* setup screen */
+        #setup { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+        #setup h2 { font-size: 18px; text-align: center; margin: 6px 0 2px; }
+        .prow {
+            display: flex; align-items: center; gap: 10px;
+            background: var(--panel); border-radius: 12px; padding: 10px 12px;
+        }
+        .prow .dot { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; border: 2px solid rgba(255,255,255,.5); }
+        .prow .pname { font-weight: 700; font-size: 15px; flex: 1; }
+        .seg { display: flex; background: rgba(0,0,0,.25); border-radius: 9px; padding: 3px; gap: 3px; }
+        .seg button {
+            border: none; background: transparent; color: var(--muted);
+            font-size: 12px; font-weight: 800; padding: 8px 10px; border-radius: 7px; cursor: pointer;
+        }
+        .seg button.active { background: var(--gold); color: #3a2503; }
+        .big-btn {
+            border: none; border-radius: 14px; cursor: pointer; margin-top: 6px;
+            background: linear-gradient(135deg, #f5b301, #e08e00);
+            color: #3a2503; font-size: 17px; font-weight: 800; padding: 16px; min-height: 58px;
+            box-shadow: 0 6px 18px rgba(245,179,1,.35);
+        }
+        .big-btn:active { transform: scale(.97); }
+        .big-btn:disabled { opacity: .45; }
+        .legend { text-align: center; font-size: 12px; color: var(--muted); line-height: 1.7; margin-top: 4px; }
+
+        /* game screen */
+        #game { width: 100%; display: none; flex-direction: column; align-items: center; }
+        .banner {
+            display: flex; align-items: center; gap: 8px;
+            background: var(--panel); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px;
+            font-size: 14px; font-weight: 700; width: 100%; justify-content: center;
+        }
+        .banner .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,.5); }
+        .banner .sub { color: var(--muted); font-weight: 600; font-size: 12px; }
+        .stage { position: relative; width: 100%; }
+        canvas#board { width: 100%; aspect-ratio: 600 / 660; border-radius: var(--radius); display: block; box-shadow: 0 12px 40px rgba(0,0,0,.5); touch-action: none; }
+        .toast {
+            position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%) scale(.9);
+            background: rgba(20,8,16,.92); border: 1px solid rgba(245,179,1,.5);
+            color: var(--ink); font-size: 16px; font-weight: 800;
+            padding: 12px 20px; border-radius: 14px; white-space: nowrap;
+            opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 15;
+        }
+        .toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        .dice-row { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
+        #diceBtn {
+            border: none; cursor: pointer; width: 84px; height: 84px; border-radius: 22px;
+            background: linear-gradient(135deg, #f5b301, #e08e00); color: #3a2503;
+            font-size: 52px; line-height: 1; box-shadow: 0 8px 22px rgba(245,179,1,.4);
+            display: flex; align-items: center; justify-content: center;
+        }
+        #diceBtn:active { transform: scale(.93); }
+        #diceBtn.dim { opacity: .45; }
+        .dice-hint { font-size: 13px; color: var(--muted); font-weight: 600; max-width: 200px; line-height: 1.5; }
+
+        .overlay {
+            position: absolute; inset: 0; z-index: 20;
+            background: rgba(42,15,30,.88); backdrop-filter: blur(3px);
+            border-radius: var(--radius);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+            opacity: 0; pointer-events: none; transition: opacity .25s ease;
+            padding: 24px; text-align: center;
+        }
+        .overlay.show { opacity: 1; pointer-events: auto; }
+        .overlay .big { font-size: 60px; }
+        .overlay h2 { font-size: 30px; font-weight: 800; }
+        .overlay .wname { font-size: 18px; font-weight: 800; }
+        .overlay .btnrow { display: flex; gap: 10px; margin-top: 8px; }
+        .overlay button {
+            border: none; border-radius: 12px; cursor: pointer;
+            background: linear-gradient(135deg, #f5b301, #e08e00);
+            color: #3a2503; font-size: 15px; font-weight: 800; padding: 14px 22px; min-height: 52px;
+        }
+        .overlay button.ghost { background: var(--panel); color: var(--ink); }
+        .overlay button:active { transform: scale(.96); }
+
+        .tip { text-align: center; margin-top: 10px; font-size: 12px; color: var(--muted); opacity: .8; line-height: 1.6; }
+        footer { text-align: center; margin-top: 8px; font-size: 13px; color: var(--muted); }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="top">
+            <img src="icon-192.png" alt="Saanp Seedhi icon">
+            <h1>Saanp Seedhi<small>साँप सीढ़ी · Snakes &amp; Ladders</small></h1>
+            <button class="icon-btn" id="soundBtn" aria-label="Toggle sound">
+                <svg id="soundOnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9.4 9.4 0 0 1 0 13"/></svg>
+                <svg id="soundOffIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M11 5L6 9H2v6h4l5 4V5z" fill="currentColor" stroke="none"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+            </button>
+        </div>
+
+        <div id="setup">
+            <h2>Who's playing?</h2>
+            <div id="playerRows"></div>
+            <button class="big-btn" id="startBtn">Start Game</button>
+            <div class="legend">🐍 Land on a snake's head and slide down<br>🪜 Land at a ladder's foot and climb up<br>🎲 Roll a 6 for an extra turn · exact roll needed for 100</div>
+        </div>
+
+        <div id="game">
+            <div class="banner" id="banner"></div>
+            <div class="stage">
+                <canvas id="board" width="600" height="660"></canvas>
+                <div class="toast" id="toast"></div>
+                <div class="overlay" id="overlay">
+                    <div class="big">🏆</div>
+                    <h2>Game Over</h2>
+                    <div class="wname" id="winName"></div>
+                    <div class="btnrow">
+                        <button id="againBtn">Play again</button>
+                        <button class="ghost" id="changeBtn">Players</button>
+                    </div>
+                </div>
+            </div>
+            <div class="dice-row">
+                <button id="diceBtn" aria-label="Roll dice">🎲</button>
+                <div class="dice-hint" id="diceHint">Tap the dice to roll</div>
+            </div>
+        </div>
+
+        <div class="tip">The Indian classic — first to 100 wins</div>
+        <footer>Made with ❤️ by Sauravhhh</footer>
+    </div>
+
+    <script src="game-logic.js"></script>
+    <script>
+        (function () {
+            'use strict';
+            var SS = window.SaanpSeedhi;
+            var CELL = 60, BW = 600, BH = 600, TRAY = 60;
+            var DICE_FACES = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+
+            var canvas = document.getElementById('board');
+            var ctx = canvas.getContext('2d');
+            var banner = document.getElementById('banner');
+            var toastEl = document.getElementById('toast');
+            var diceBtn = document.getElementById('diceBtn');
+            var diceHint = document.getElementById('diceHint');
+            var overlay = document.getElementById('overlay');
+
+            var state = null;
+            var busy = false;
+            var soundOn = localStorage.getItem('saanp_sound') !== 'off';
+            var playerTypes = ['human', 'cpu', 'off', 'off'];
+
+            // ---------- sound (Web Audio, zero files) ----------
+            var actx = null;
+            function ac() {
+                if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+                if (actx && actx.state === 'suspended') actx.resume();
+                return actx;
+            }
+            function tone(f0, f1, dur, type, vol, delay) {
+                if (!soundOn) return;
+                var c = ac(); if (!c) return;
+                var t0 = c.currentTime + (delay || 0);
+                var o = c.createOscillator(), g = c.createGain();
+                o.type = type; o.frequency.setValueAtTime(f0, t0);
+                o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t0 + dur);
+                g.gain.setValueAtTime(vol, t0);
+                g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+                o.connect(g); g.connect(c.destination);
+                o.start(t0); o.stop(t0 + dur + 0.02);
+            }
+            var sfx = {
+                click: function () { tone(700, 500, 0.06, 'square', 0.05); },
+                dice: function () { for (var i = 0; i < 6; i++) tone(300 + Math.random() * 300, 200, 0.04, 'square', 0.05, i * 0.07); },
+                hop: function (n) { tone(480 + n * 25, 620 + n * 25, 0.07, 'square', 0.06); },
+                ladder: function () { [523, 659, 784, 1047].forEach(function (f, i) { tone(f, f, 0.14, 'sine', 0.09, i * 0.09); }); },
+                snake: function () { tone(520, 110, 0.7, 'sawtooth', 0.09); },
+                win: function () { [523, 659, 784, 1047, 1319].forEach(function (f, i) { tone(f, f * 1.01, 0.22, 'triangle', 0.1, i * 0.13); }); }
+            };
+
+            // ---------- setup screen ----------
+            var rowsEl = document.getElementById('playerRows');
+            function buildSetup() {
+                rowsEl.innerHTML = '';
+                for (var i = 0; i < 4; i++) {
+                    (function (idx) {
+                        var row = document.createElement('div');
+                        row.className = 'prow';
+                        row.innerHTML = '<div class="dot" style="background:' + SS.PLAYER_COLORS[idx] + '"></div>' +
+                            '<div class="pname">Player ' + (idx + 1) + '</div>' +
+                            '<div class="seg">' +
+                            '<button data-t="human">You</button>' +
+                            '<button data-t="cpu">CPU</button>' +
+                            '<button data-t="off">Off</button></div>';
+                        var btns = row.querySelectorAll('button');
+                        btns.forEach(function (b) {
+                            if (b.getAttribute('data-t') === playerTypes[idx]) b.classList.add('active');
+                            b.addEventListener('click', function () {
+                                playerTypes[idx] = b.getAttribute('data-t');
+                                btns.forEach(function (x) { x.classList.remove('active'); });
+                                b.classList.add('active');
+                                sfx.click();
+                                refreshStart();
+                            });
+                        });
+                        rowsEl.appendChild(row);
+                    })(i);
+                }
+                refreshStart();
+            }
+            function activeCount() { return playerTypes.filter(function (t) { return t !== 'off'; }).length; }
+            function refreshStart() {
+                document.getElementById('startBtn').disabled = activeCount() < 2;
+            }
+            document.getElementById('startBtn').addEventListener('click', function () {
+                sfx.click();
+                startGame();
+            });
+
+            // ---------- board geometry ----------
+            function cellCenter(n) {
+                if (n <= 0) return null;
+                var rc = SS.cellRC(n);
+                return { x: rc.col * CELL + CELL / 2, y: rc.row * CELL + CELL / 2 };
+            }
+            function trayPos(idx) {
+                return { x: 90 + idx * 140, y: BH + TRAY / 2 };
+            }
+
+            // ---------- drawing ----------
+            function drawBoard() {
+                // cells
+                for (var n = 1; n <= 100; n++) {
+                    var rc = SS.cellRC(n);
+                    var x = rc.col * CELL, y = rc.row * CELL;
+                    var alt = (rc.row + rc.col) % 2 === 0;
+                    ctx.fillStyle = alt ? '#f7ead0' : '#efdcae';
+                    ctx.fillRect(x, y, CELL, CELL);
+                    ctx.fillStyle = 'rgba(120,60,30,.55)';
+                    ctx.font = '700 11px sans-serif';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(n, x + 5, y + 15);
+                }
+                // grid lines
+                ctx.strokeStyle = 'rgba(120,60,30,.25)';
+                ctx.lineWidth = 1;
+                for (var i = 0; i <= 10; i++) {
+                    ctx.beginPath(); ctx.moveTo(i * CELL + .5, 0); ctx.lineTo(i * CELL + .5, BH); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0, i * CELL + .5); ctx.lineTo(BW, i * CELL + .5); ctx.stroke();
+                }
+                // highlight snake heads / ladder feet
+                Object.keys(SS.SNAKES).forEach(function (k) {
+                    var c = cellCenter(+k);
+                    ctx.fillStyle = 'rgba(220,60,60,.20)';
+                    ctx.beginPath(); ctx.arc(c.x, c.y, 20, 0, 6.29); ctx.fill();
+                });
+                Object.keys(SS.LADDERS).forEach(function (k) {
+                    var c2 = cellCenter(+k);
+                    ctx.fillStyle = 'rgba(40,160,80,.20)';
+                    ctx.beginPath(); ctx.arc(c2.x, c2.y, 20, 0, 6.29); ctx.fill();
+                });
+                // trophy on 100
+                var c100 = cellCenter(100);
+                ctx.font = '26px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('🏆', c100.x, c100.y + 22);
+
+                drawLadders();
+                drawSnakes();
+
+                // start tray
+                ctx.fillStyle = 'rgba(0,0,0,.25)';
+                ctx.fillRect(0, BH, BW, TRAY);
+                ctx.fillStyle = 'rgba(253,246,236,.5)';
+                ctx.font = '800 13px sans-serif'; ctx.textAlign = 'left';
+                ctx.fillText('START', 14, BH + 37);
+            }
+
+            function drawLadders() {
+                Object.keys(SS.LADDERS).forEach(function (k) {
+                    var a = cellCenter(+k), b = cellCenter(SS.LADDERS[k]);
+                    var dx = b.x - a.x, dy = b.y - a.y;
+                    var len = Math.hypot(dx, dy);
+                    var px = -dy / len * 9, py = dx / len * 9;
+                    ctx.lineCap = 'round';
+                    [[px, py], [-px, -py]].forEach(function (off) {
+                        ctx.strokeStyle = '#b97f0a';
+                        ctx.lineWidth = 7;
+                        ctx.beginPath();
+                        ctx.moveTo(a.x + off[0], a.y + off[1]);
+                        ctx.lineTo(b.x + off[0], b.y + off[1]);
+                        ctx.stroke();
+                        ctx.strokeStyle = '#f5b301';
+                        ctx.lineWidth = 4;
+                        ctx.beginPath();
+                        ctx.moveTo(a.x + off[0], a.y + off[1]);
+                        ctx.lineTo(b.x + off[0], b.y + off[1]);
+                        ctx.stroke();
+                    });
+                    var rungs = Math.floor(len / 26);
+                    ctx.strokeStyle = '#e0a200';
+                    ctx.lineWidth = 5;
+                    for (var i = 1; i <= rungs; i++) {
+                        var t = i / (rungs + 1);
+                        var mx = a.x + dx * t, my = a.y + dy * t;
+                        ctx.beginPath();
+                        ctx.moveTo(mx + px, my + py);
+                        ctx.lineTo(mx - px, my - py);
+                        ctx.stroke();
+                    }
+                });
+            }
+
+            function drawSnakes() {
+                Object.keys(SS.SNAKES).forEach(function (k) {
+                    var head = cellCenter(+k), tail = cellCenter(SS.SNAKES[k]);
+                    var dx = tail.x - head.x, dy = tail.y - head.y;
+                    var len = Math.hypot(dx, dy) || 1;
+                    var px = -dy / len, py = dx / len;
+                    // wiggly body
+                    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+                    ctx.strokeStyle = '#1d8a4c';
+                    ctx.lineWidth = 13;
+                    ctx.beginPath();
+                    var segs = 24;
+                    for (var i = 0; i <= segs; i++) {
+                        var t = i / segs;
+                        var wob = Math.sin(t * Math.PI * 3.2) * 13 * Math.sin(t * Math.PI);
+                        var x = head.x + dx * t + px * wob;
+                        var y = head.y + dy * t + py * wob;
+                        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                    ctx.strokeStyle = '#27b562';
+                    ctx.lineWidth = 7;
+                    ctx.stroke();
+                    // head
+                    ctx.fillStyle = '#27b562';
+                    ctx.beginPath(); ctx.arc(head.x, head.y, 13, 0, 6.29); ctx.fill();
+                    // eyes face along initial direction
+                    var ang = Math.atan2(dy, dx);
+                    [-0.5, 0.5].forEach(function (off) {
+                        var ex = head.x + Math.cos(ang + off) * 7;
+                        var ey = head.y + Math.sin(ang + off) * 7;
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath(); ctx.arc(ex, ey, 3.4, 0, 6.29); ctx.fill();
+                        ctx.fillStyle = '#222';
+                        ctx.beginPath(); ctx.arc(ex + Math.cos(ang) * 1.4, ey + Math.sin(ang) * 1.4, 1.6, 0, 6.29); ctx.fill();
+                    });
+                });
+            }
+
+            function tokenTarget(p, idx) {
+                if (p.pos <= 0) return trayPos(p.homeIdx);
+                var c = cellCenter(p.pos);
+                // offset when sharing a cell
+                var mates = state.players.filter(function (q) { return q.pos === p.pos; });
+                var mi = mates.indexOf(p);
+                var offs = [[-11, -11], [11, -11], [-11, 11], [11, 11]];
+                var o = offs[mi] || [0, 0];
+                return { x: c.x + o[0], y: c.y + o[1] };
+            }
+
+            function drawTokens() {
+                if (!state) return;
+                state.players.forEach(function (p) {
+                    var scale = p.pos <= 0 ? 0.7 : 1;
+                    var r = 15 * scale;
+                    ctx.beginPath(); ctx.arc(p.vx, p.vy, r + 3, 0, 6.29);
+                    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fill();
+                    var g = ctx.createRadialGradient(p.vx - 4, p.vy - 5, 2, p.vx, p.vy, r + 2);
+                    g.addColorStop(0, '#ffffff');
+                    g.addColorStop(0.25, p.color);
+                    g.addColorStop(1, p.color);
+                    ctx.beginPath(); ctx.arc(p.vx, p.vy, r, 0, 6.29);
+                    ctx.fillStyle = g; ctx.fill();
+                    if (p.type === 'cpu') {
+                        ctx.fillStyle = 'rgba(0,0,0,.55)';
+                        ctx.font = '800 ' + Math.round(11 * scale) + 'px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('🤖', p.vx, p.vy + 4 * scale);
+                    }
+                });
+            }
+
+            function render() {
+                ctx.clearRect(0, 0, BW, BH + TRAY);
+                drawBoard();
+                drawTokens();
+            }
+
+            // ---------- token animation ----------
+            function animateToken(p, to, dur, arcH) {
+                return new Promise(function (resolve) {
+                    var sx = p.vx, sy = p.vy;
+                    var cx = (sx + to.x) / 2, cy = Math.min(sy, to.y) - (arcH || 26);
+                    var t0 = performance.now();
+                    p.anim = { sx: sx, sy: sy, cx: cx, cy: cy, tx: to.x, ty: to.y, t0: t0, dur: dur, resolve: resolve };
+                });
+            }
+            function stepAnim(now) {
+                if (!state) return;
+                state.players.forEach(function (p) {
+                    var a = p.anim;
+                    if (!a) {
+                        var t = tokenTarget(p);
+                        p.vx += (t.x - p.vx) * 0.2;
+                        p.vy += (t.y - p.vy) * 0.2;
+                        return;
+                    }
+                    var k = Math.min((now - a.t0) / a.dur, 1);
+                    var u = 1 - k;
+                    p.vx = u * u * a.sx + 2 * u * k * a.cx + k * k * a.tx;
+                    p.vy = u * u * a.sy + 2 * u * k * a.cy + k * k * a.ty;
+                    if (k >= 1) { p.anim = null; a.resolve(); }
+                });
+            }
+            function delay(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+            // ---------- game flow ----------
+            function startGame() {
+                state = SS.createGame(playerTypes.slice());
+                state.players.forEach(function (p, i) {
+                    p.homeIdx = i;
+                    var t = trayPos(i);
+                    p.vx = t.x; p.vy = t.y; p.anim = null;
+                });
+                document.getElementById('setup').style.display = 'none';
+                document.getElementById('game').style.display = 'flex';
+                overlay.classList.remove('show');
+                diceBtn.textContent = '🎲';
+                updateBanner();
+                render();
+                maybeCpu();
+            }
+
+            function updateBanner() {
+                var p = state.players[state.turn];
+                var hint = p.type === 'human' ? '<span class="sub">· tap the dice</span>' : '<span class="sub">· thinking…</span>';
+                banner.innerHTML = '<div class="dot" style="background:' + p.color + '"></div><div>' + p.name + "'s turn " + hint + '</div>';
+                var human = p.type === 'human' && !busy && state.winner === -1;
+                diceBtn.classList.toggle('dim', !human);
+                diceHint.textContent = p.type === 'human' ? 'Tap the dice to roll' : p.name + ' is rolling…';
+            }
+
+            var toastTimer = null;
+            function showToast(text, ms) {
+                toastEl.textContent = text;
+                toastEl.classList.add('show');
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, ms || 1600);
+            }
+
+            function animateDice() {
+                return new Promise(function (resolve) {
+                    sfx.dice();
+                    var iv = setInterval(function () {
+                        diceBtn.textContent = DICE_FACES[Math.floor(Math.random() * 6)];
+                    }, 70);
+                    setTimeout(function () {
+                        clearInterval(iv);
+                        var roll = SS.rollDice(state.rng);
+                        diceBtn.textContent = DICE_FACES[roll - 1];
+                        resolve(roll);
+                    }, 560);
+                });
+            }
+
+            async function doTurn() {
+                var p = state.players[state.turn];
+                var roll = await animateDice();
+                var ev = SS.takeTurn(state, roll);
+
+                if (ev.overshoot) {
+                    showToast(p.name + ' needs exactly ' + (100 - p.pos) + '!');
+                    await delay(900);
+                } else {
+                    var landed = ev.snake ? ev.snake.from : ev.ladder ? ev.ladder.from : ev.to;
+                    var step = 0;
+                    for (var s = ev.from + 1; s <= landed; s++) {
+                        await animateToken(p, cellCenter(s), 170, 22);
+                        sfx.hop(step++);
+                    }
+                    if (ev.snake) {
+                        showToast('🐍 Snake! ' + ev.snake.from + ' → ' + ev.snake.to);
+                        sfx.snake();
+                        await animateToken(p, cellCenter(ev.snake.to), 850, 60);
+                        await delay(350);
+                    } else if (ev.ladder) {
+                        showToast('🪜 Ladder! ' + ev.ladder.from + ' → ' + ev.ladder.to);
+                        sfx.ladder();
+                        await animateToken(p, cellCenter(ev.ladder.to), 850, 110);
+                        await delay(350);
+                    }
+                }
+
+                if (ev.won) {
+                    sfx.win();
+                    if (navigator.vibrate) { try { navigator.vibrate([60, 40, 60, 40, 120]); } catch (e) {} }
+                    await delay(500);
+                    document.getElementById('winName').innerHTML =
+                        '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:' + p.color + ';margin-right:6px"></span>' + p.name + ' wins! 🎉';
+                    overlay.classList.add('show');
+                    updateBanner();
+                    return;
+                }
+
+                SS.nextTurn(state, ev.extraTurn);
+                if (ev.extraTurn) showToast('🎲 ' + p.name + ' rolled a 6 — again!', 1400);
+                updateBanner();
+                maybeCpu();
+            }
+
+            function maybeCpu() {
+                if (!state || state.winner !== -1) return;
+                var p = state.players[state.turn];
+                if (p.type === 'cpu' && !busy) {
+                    setTimeout(function () {
+                        if (!state || busy || state.winner !== -1) return;
+                        if (state.players[state.turn].type !== 'cpu') return;
+                        busy = true;
+                        doTurn().then(function () { busy = false; });
+                    }, 1000);
+                }
+            }
+
+            diceBtn.addEventListener('click', function () {
+                if (busy || !state || state.winner !== -1) return;
+                if (state.players[state.turn].type !== 'human') return;
+                ac();
+                busy = true;
+                doTurn().then(function () { busy = false; });
+            });
+
+            document.getElementById('againBtn').addEventListener('click', function () {
+                sfx.click();
+                startGame();
+            });
+            document.getElementById('changeBtn').addEventListener('click', function () {
+                sfx.click();
+                state = null;
+                document.getElementById('game').style.display = 'none';
+                document.getElementById('setup').style.display = 'flex';
+                buildSetup();
+            });
+
+            // sound toggle
+            function renderSoundIcon() {
+                document.getElementById('soundOnIcon').style.display = soundOn ? 'block' : 'none';
+                document.getElementById('soundOffIcon').style.display = soundOn ? 'none' : 'block';
+            }
+            document.getElementById('soundBtn').addEventListener('click', function (e) {
+                e.stopPropagation();
+                soundOn = !soundOn;
+                localStorage.setItem('saanp_sound', soundOn ? 'on' : 'off');
+                renderSoundIcon();
+            });
+            renderSoundIcon();
+
+            // main loop
+            function loop(now) {
+                requestAnimationFrame(loop);
+                if (!state) return;
+                stepAnim(now);
+                render();
+            }
+
+            buildSetup();
+            requestAnimationFrame(loop);
+
+            // PWA service worker
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function () {
+                    navigator.serviceWorker.register('sw.js').catch(function (err) {
+                        console.warn('SW registration failed:', err);
+                    });
+                });
+            }
+        })();
+    </script>
+</body>
+</html>
